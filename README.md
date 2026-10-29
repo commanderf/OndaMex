@@ -2,7 +2,7 @@
 
 Kleine Web-App für den Strandurlaub in Mexiko: die wichtigsten spanischen Vokabeln und Floskeln – als Lernkarten und Quiz. Läuft komplett im Browser (eine einzige HTML-Datei, keine Bibliotheken, keine Datenanfragen).
 
-**Live:** `https://commanderf.github.io/spanisch-mexico/` (nach dem ersten Deploy)
+**Live:** `https://commanderf.github.io/OndaMex/`
 
 ## Funktionen
 
