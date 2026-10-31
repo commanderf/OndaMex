@@ -498,6 +498,44 @@ $("next").onclick = () => {
 };
 
 // ---------- Quiz ----------
+// Plausiblere Distraktoren: bevorzugt gleiche Kategorie und ähnliche Oberflächenform,
+// damit z. B. Fragen nicht neben Aussagesätzen liegen (¿…? vs. ohne ¿…?).
+const answerText = c => (state.dir === "de2es" ? c.es : c.de);
+const hasQ = s => s.indexOf("¿") !== -1;
+const hasEll = s => s.indexOf("…") !== -1;
+const hasSlash = s => s.indexOf("/") !== -1;
+
+function scoreDistractor(c, ref) {
+  let s = 0;
+  const t = answerText(c), r = answerText(ref);
+  if (c.cat === ref.cat) s += 4;                      // gleiche Kategorie
+  if (hasQ(t) === hasQ(r)) s += 2;                    // Frage ja/nein
+  if (hasEll(t) === hasEll(r)) s += 2;                // Lückensatz ja/nein
+  if (hasSlash(t) === hasSlash(r)) s += 2;            // Alternativ-Struktur ja/nein
+  const wc = x => x.split(/\s+/).length;
+  if (Math.abs(wc(t) - wc(r)) <= 2) s += 1;           // ähnliche Länge in Wörtern
+  if (Math.abs(t.length - r.length) <= 10) s += 1;    // ähnliche Länge in Zeichen
+  return s;
+}
+
+function pickDistractors(card, list) {
+  const pool = list.filter(x => x !== card);
+  const buckets = {};
+  let best = -1;
+  pool.forEach(c => {
+    const s = scoreDistractor(c, card);
+    (buckets[s] = buckets[s] || []).push(c);
+    if (s > best) best = s;
+  });
+  const picked = [];
+  // vom besten (Score-bucket) nach unten: je Stufe gemischt, bis 3 Stück zusammen sind
+  for (let s = best; s >= 0 && picked.length < 3; s--) {
+    const bucket = shuffle(buckets[s] || []);
+    while (picked.length < 3 && bucket.length) picked.push(bucket.pop());
+  }
+  return picked;
+}
+
 const LEN_OPTIONS = [
   { v: 0,  label: "Offen" },
   { v: 5,  label: "5 Fragen" },
@@ -552,8 +590,7 @@ function newQuestion() {
   state.quizOpen = true;
   state.quizTotal++;
   const card = list[Math.floor(Math.random() * list.length)];
-  const others = shuffle(list.filter(x => x !== card)).slice(0, 3);
-  const options = shuffle([card, ...others]);
+  const options = shuffle([card, ...pickDistractors(card, list)]);
   state.quizCurrent = { card, correct: options.indexOf(card) };
   $("quiz-hint").textContent = "Welches passt zur Frage?";
   $("quiz-q").textContent = front(card);

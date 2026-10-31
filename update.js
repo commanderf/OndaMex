@@ -1,7 +1,7 @@
 "use strict";
 // Update-Erkennung nach Quiz-Muster (kein Service Worker, keine PWA):
 // Serverversion steht in version.json (beim Publish automatisch aus APP_VERSION erzeugt).
-const APP_VERSION = "0.3.0";
+const APP_VERSION = "0.4.0";
 
 (function () {
   const IGNORE_KEY = "ondamex-update-ignored";
