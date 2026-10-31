@@ -101,6 +101,23 @@
   }
   .card .word { font-size: 1.55rem; font-weight: 700; }
   .card .hint { font-size: .8rem; color: var(--muted); margin-top: 6px; }
+  .word-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+  .speaker {
+    border: none;
+    background: var(--sand);
+    color: var(--ink);
+    border-radius: 999px;
+    padding: 5px 11px;
+    font-size: .95rem;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .speaker[hidden] { display: none; }
   .answer {
     margin-top: 16px;
     padding-top: 14px;
@@ -204,10 +221,16 @@
 
   <section id="learn-view">
     <div class="card" id="flashcard">
-      <div class="word" id="front"></div>
+      <div class="word-row">
+        <div class="word" id="front"></div>
+        <button class="speaker" id="spk-front" title="Aussprache anhören" hidden>🔊</button>
+      </div>
       <div class="hint" id="front-hint"></div>
       <div class="answer">
-        <div class="word" id="back"></div>
+        <div class="word-row">
+          <div class="word" id="back"></div>
+          <button class="speaker" id="spk-back" title="Aussprache anhören">🔊</button>
+        </div>
       </div>
       <div class="progress" id="learn-progress"></div>
     </div>
@@ -220,7 +243,10 @@
   <section id="quiz-view" hidden>
     <div class="card">
       <div class="hint">Welches passt zur Frage?</div>
-      <div class="word" id="quiz-q" style="margin-top:10px;"></div>
+      <div class="word-row">
+        <div class="word" id="quiz-q" style="margin-top:10px;"></div>
+        <button class="speaker" id="spk-quiz" title="Frage anhören" hidden>🔊</button>
+      </div>
       <div class="quiz-choices" id="quiz-choices"></div>
       <div class="quiz-score" id="quiz-score"></div>
     </div>
@@ -342,6 +368,37 @@ const DATA = [
 
 const CATS = ["Alles", ...new Set(DATA.map(d => d.cat))];
 
+// ---------- Sprachausgabe (Web Speech API) ----------
+// Kein Netzabruf: Sprachengine des Browsers/Geräts; bevorzugt es-MX, sonst jede Spanisch-Stimme.
+const HAS_TTS = typeof speechSynthesis !== "undefined" && typeof SpeechSynthesisUtterance !== "undefined";
+let esVoice = null;
+
+function pickVoice() {
+  if (!HAS_TTS) return;
+  const voices = speechSynthesis.getVoices();
+  esVoice =
+    voices.find(v => /^es[-_]mx/i.test(v.lang)) ||
+    voices.find(v => /^es\b/i.test(v.lang)) ||
+    voices.find(v => /spanish/i.test(v.name)) ||
+    null;
+}
+if (HAS_TTS) {
+  pickVoice();
+  if (typeof speechSynthesis.addEventListener === "function") speechSynthesis.addEventListener("voiceschanged", pickVoice);
+  else speechSynthesis.onvoiceschanged = pickVoice;
+}
+
+function speakSpanish(text) {
+  if (!HAS_TTS || !text) return;
+  speechSynthesis.cancel(); // laufende Ausgabe abbrechen, nicht stapeln
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = (esVoice && esVoice.lang) || "es-MX";
+  if (esVoice) u.voice = esVoice;
+  u.rate = 0.9; // entspannt fürs Zuhören beim Lernen
+  speechSynthesis.speak(u);
+}
+const spanishOf = c => c.es; // die spanische Seite der Karte – unabhängig von der Anzeigerichtung
+
 const state = {
   mode: "learn",
   cat: "Alles",
@@ -396,6 +453,9 @@ function renderLearn() {
   $("front-hint").textContent = state.dir === "de2es" ? "Karte antippen für die Übersetzung" : "Toca la tarjeta para la traducción";
   $("back").textContent = back(c);
   $("flashcard").classList.toggle("hidden-answer", !state.revealed);
+  // Lautsprecher nur an der jeweils spanischen Seite: es2de → Vorderseite, de2es → Antwortseite
+  $("spk-front").hidden = !HAS_TTS || state.dir !== "es2de";
+  $("spk-back").hidden = !HAS_TTS || state.dir !== "de2es";
   $("learn-progress").textContent =
     (state.learnIdx + 1) + " / " + list.length +
     (state.cat === "Alles" ? " · alle Kategorien" : " · " + state.cat);
@@ -426,6 +486,8 @@ function newQuestion() {
   const options = shuffle([card, ...others]);
   state.quizCurrent = { card, correct: options.indexOf(card) };
   $("quiz-q").textContent = front(card);
+  // Lautsprecher nur, wenn die Frage selbst spanisch ist (es2de) – sonst würde das Vorlesen die Antwort verraten
+  $("spk-quiz").hidden = !HAS_TTS || state.dir !== "es2de";
   $("quiz-score").textContent = "Richtig: " + state.quizScore + " von " + (state.quizTotal - 1);
   const box = $("quiz-choices");
   box.innerHTML = "";
@@ -476,6 +538,9 @@ $("direction").onclick = () => {
 };
 
 // ---------- Init ----------
+$("spk-front").onclick = () => speakSpanish(spanishOf(pool()[state.learnIdx]));
+$("spk-back").onclick = () => speakSpanish(spanishOf(pool()[state.learnIdx]));
+$("spk-quiz").onclick = () => speakSpanish(spanishOf(state.quizCurrent.card));
 renderChips();
 setMode("learn");
 </script>
