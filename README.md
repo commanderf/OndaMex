@@ -7,7 +7,7 @@ Spanisch für den Strandurlaub in Mexiko: die wichtigsten spanischen Vokabeln un
 ## Funktionen
 
 - **Lernmodus** – Lernkarten mit Tippen zum Aufdecken
-- **Quizmodus** – Multiple Choice mit Punktzahl
+- **Quizmodus** – Multiple Choice mit Punktzahl; **Rundenlänge einstellbar** (Offen/5/10/20 Fragen), am Rundenende Auswertung – die Einstellung wird im Browser gemerkt (localStorage)
 - **Richtung** – DE → ES und ES → DE umschaltbar
 - **Kategorien** – Begrüßung, Restaurant, Strand, Ausflug, Einkaufen, Notfall, Zahlen (oder „Alles“ gemischt)
 - **Sprachausgabe** – 🔊-Button an der spanischen Karte liest das Wort/die Floskel vor (Web Speech API des Geräts, bevorzugt mexikanische Stimme `es-MX`); im Quiz nur, wenn die Frage selbst spanisch ist (Vorlesen der deutschen-Frage-Richtung würde die Lösung verraten)

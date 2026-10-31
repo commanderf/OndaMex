@@ -163,6 +163,23 @@
   .quiz-score { text-align: center; font-size: .85rem; color: var(--muted); margin-top: 12px; }
   .quiz-next { margin-top: 12px; display: none; }
   .quiz-next.visible { display: block; }
+  .quiz-setup {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 12px;
+  }
+  .quiz-setup .setup-label { font-size: .85rem; color: var(--muted); }
+  .quiz-setup .lenc {
+    border: 1px solid color-mix(in srgb, var(--muted) 40%, transparent);
+    background: var(--card);
+    color: var(--ink);
+    border-radius: 8px;
+    padding: 5px 11px;
+    font-size: .85rem;
+    cursor: pointer;
+  }
+  .quiz-setup .lenc.active { background: var(--teal); border-color: var(--teal); color: #fff; font-weight: 600; }
   #update-banner {
     position: fixed;
     left: 0; right: 0; bottom: 0;
@@ -241,8 +258,9 @@
   </section>
 
   <section id="quiz-view" hidden>
+    <div class="quiz-setup">Länge: <div id="quiz-length"></div></div>
     <div class="card">
-      <div class="hint">Welches passt zur Frage?</div>
+      <div class="hint" id="quiz-hint">Welches passt zur Frage?</div>
       <div class="word-row">
         <div class="word" id="quiz-q" style="margin-top:10px;"></div>
         <button class="speaker" id="spk-quiz" title="Frage anhören" hidden>🔊</button>
@@ -409,6 +427,9 @@ const state = {
   quizTotal: 0,
   quizOpen: false,
   quizCurrent: null,
+  roundLen: 0,          // 0 = offene Runde
+  round: { len: 0 },
+  finished: false,
 };
 
 const $ = id => document.getElementById(id);
@@ -438,7 +459,7 @@ function renderChips() {
       state.revealed = false;
       renderChips();
       if (state.mode === "learn") renderLearn();
-      else newQuestion();
+      else newRound();
     };
     el.appendChild(b);
   });
@@ -477,6 +498,55 @@ $("next").onclick = () => {
 };
 
 // ---------- Quiz ----------
+const LEN_OPTIONS = [
+  { v: 0,  label: "Offen" },
+  { v: 5,  label: "5 Fragen" },
+  { v: 10, label: "10 Fragen" },
+  { v: 20, label: "20 Fragen" },
+];
+
+function renderLengthChips() {
+  const box = $("quiz-length");
+  box.innerHTML = "";
+  LEN_OPTIONS.forEach(opt => {
+    const b = document.createElement("button");
+    b.className = "lenc" + (opt.v === state.roundLen ? " active" : "");
+    b.textContent = opt.label;
+    b.onclick = () => {
+      state.roundLen = opt.v;
+      try { localStorage.setItem("ondamex-quiz-length", String(opt.v)); } catch (e) {}
+      renderLengthChips();
+      newRound(); // Länge wechseln = frische Runde
+    };
+    box.appendChild(b);
+  });
+}
+
+function startRound() {
+  state.round = { len: state.roundLen };
+  state.quizScore = 0;
+  state.quizTotal = 0;
+  state.finished = false;
+  state.quizOpen = true;
+}
+
+function newRound() {
+  startRound();
+  newQuestion();
+}
+
+function showResult() {
+  state.finished = true;
+  $("quiz-hint").textContent = "Runde fertig";
+  $("quiz-q").textContent = "🎉 " + state.quizScore + " von " + state.quizTotal + " richtig";
+  const pct = state.quizTotal ? Math.round((state.quizScore / state.quizTotal) * 100) : 0;
+  $("quiz-score").textContent = state.quizScore >= state.quizTotal * 0.8 ? "¡Fantástico! 🌴 " + pct + " %" : pct + " % richtig";
+  $("quiz-choices").innerHTML = "";
+  $("spk-quiz").hidden = true;
+  $("quiz-next").textContent = "Neue Runde →";
+  $("quiz-next").classList.add("visible");
+}
+
 function newQuestion() {
   const list = pool();
   state.quizOpen = true;
@@ -485,10 +555,13 @@ function newQuestion() {
   const others = shuffle(list.filter(x => x !== card)).slice(0, 3);
   const options = shuffle([card, ...others]);
   state.quizCurrent = { card, correct: options.indexOf(card) };
+  $("quiz-hint").textContent = "Welches passt zur Frage?";
   $("quiz-q").textContent = front(card);
   // Lautsprecher nur, wenn die Frage selbst spanisch ist (es2de) – sonst würde das Vorlesen die Antwort verraten
   $("spk-quiz").hidden = !HAS_TTS || state.dir !== "es2de";
-  $("quiz-score").textContent = "Richtig: " + state.quizScore + " von " + (state.quizTotal - 1);
+  $("quiz-score").textContent =
+    "Richtig: " + state.quizScore + " von " + (state.quizTotal - 1) +
+    (state.round.len ? " · Frage " + state.quizTotal + "/" + state.round.len : "");
   const box = $("quiz-choices");
   box.innerHTML = "";
   options.forEach((opt, i) => {
@@ -510,11 +583,19 @@ function answer(i, box) {
   });
   if (i === correct) state.quizScore++;
   else box.children[i].classList.add("wrong");
-  $("quiz-score").textContent = "Richtig: " + state.quizScore + " von " + state.quizTotal;
+  const last = state.round.len > 0 && state.quizTotal >= state.round.len;
+  $("quiz-score").textContent =
+    "Richtig: " + state.quizScore + " von " + state.quizTotal +
+    (state.round.len ? " · Frage " + state.quizTotal + "/" + state.round.len : "");
+  $("quiz-next").textContent = last ? "Auswertung ansehen →" : "Nächste Frage →";
   $("quiz-next").classList.add("visible");
 }
 
-$("quiz-next").onclick = () => { newQuestion(); };
+$("quiz-next").onclick = () => {
+  if (state.finished) { newRound(); }
+  else if (state.round.len > 0 && state.quizTotal >= state.round.len) { showResult(); }
+  else { newQuestion(); }
+};
 
 // ---------- Modus & Richtung ----------
 function setMode(mode) {
@@ -523,7 +604,7 @@ function setMode(mode) {
   $("tab-quiz").classList.toggle("active", mode === "quiz");
   $("learn-view").hidden = mode !== "learn";
   $("quiz-view").hidden = mode !== "quiz";
-  if (mode === "quiz") newQuestion();
+  if (mode === "quiz") newRound();
   else renderLearn();
 }
 $("tab-learn").onclick = () => setMode("learn");
@@ -534,14 +615,19 @@ $("direction").onclick = () => {
   $("direction").textContent = state.dir === "de2es" ? "DE → ES" : "ES → DE";
   state.revealed = false;
   if (state.mode === "learn") renderLearn();
-  else newQuestion();
+  else newRound();
 };
 
 // ---------- Init ----------
 $("spk-front").onclick = () => speakSpanish(spanishOf(pool()[state.learnIdx]));
 $("spk-back").onclick = () => speakSpanish(spanishOf(pool()[state.learnIdx]));
 $("spk-quiz").onclick = () => speakSpanish(spanishOf(state.quizCurrent.card));
+try {
+  const savedLen = parseInt(localStorage.getItem("ondamex-quiz-length"), 10);
+  if (LEN_OPTIONS.some(o => o.v === savedLen)) state.roundLen = savedLen;
+} catch (e) {}
 renderChips();
+renderLengthChips();
 setMode("learn");
 </script>
 <script src="update.js"></script>
